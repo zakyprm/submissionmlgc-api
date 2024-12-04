@@ -1,3 +1,5 @@
 /node_modules
 .env
 package-lock.json
+CUsersASUS.sshgcp_key
+CUsersASUS.sshgcp_key.pub
