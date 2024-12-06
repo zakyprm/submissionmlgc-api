@@ -1,45 +1,58 @@
-const predictClassification = require('../services/inferenceService');
-const crypto = require('crypto');
-const storeData = require('../services/storeData');
- 
+const predictClassification = require("../services/inferenceService");
+const crypto = require("crypto");
+const storeData = require("../services/storeData");
+const { Firestore } = require("@google-cloud/firestore");
+const { get } = require("http");
+
 async function postPredictHandler(request, h) {
-  try {
-      const { image } = request.payload;
-      const { model } = request.server.app;
+  const { image } = request.payload;
+  const { model } = request.server.app;
 
-      const { confidenceScore, label, explanation, suggestion } = await predictClassification(model, image);
-      const id = crypto.randomUUID();
-      const createdAt = new Date().toISOString();
+  const { result, suggestion } = await predictClassification(model, image);
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
 
-      const data = {
-          id,
-          result: label,
-          suggestion,
-          createdAt,
-      };
+  const data = {
+    id: id,
+    result: result,
+    suggestion: suggestion,
+    createdAt: createdAt,
+  };
+  console.log("Data ingin dikirim");
+  await storeData(id, data);
+  console.log("Data berhasil dikirim");
 
-      await storeData(id, data);
+  const response = h.response({
+    status: "success",
+    message: "Model is predicted successfully",
+    data,
+  });
 
-      const response = h.response({
-          status: 'success',
-          message: confidenceScore > 99
-              ? 'Model is predicted successfully.'
-              : 'Model is predicted successfully but under threshold. Please use the correct picture.',
-          data,
-      });
-      response.code(201);
-      return response;
-  } catch (error) {
-      console.error('Error occurred:', error);
-
-      // Tangkap error dan kembalikan status integer
-      const response = h.response({
-          status: 'fail',
-          message: `Error occurred: ${error.message}`,
-      });
-      response.code(500); // Pastikan status code berupa integer
-      return response;
-  }
+  response.code(201);
+  return response;
 }
- 
-module.exports = postPredictHandler;
+
+async function getHistoriesHandler(request, h) {
+  const db = new Firestore();
+  const predictCollection = db.collection("predictions");
+  const predictSnapshot = await predictCollection.get();
+
+  const data = [];
+
+  predictSnapshot.forEach((doc) => {
+    const history = {
+      id: doc.id,
+      history: doc.data(),
+    };
+    data.push(history);
+  });
+
+  const response = h.response({
+    status: "success",
+    data: data,
+  });
+  response.code(200);
+  return response;
+}
+
+module.exports = { postPredictHandler, getHistoriesHandler };
